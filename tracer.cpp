@@ -18,7 +18,7 @@ int main () {
 	int width = 512, height = 512, depth = 3;
 	int *out = new int [width * height * depth];
 	picture_creator (width, height, depth, out);
-	for (int i = width * height * depth; i >= 0 ; i--) {
+	for (int i = width * height * depth - 1; i >= 0 ; i--) {
 		printf ("%c", out [i]);
 	}
 }

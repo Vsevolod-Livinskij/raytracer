@@ -1,9 +1,9 @@
 int G [] = {247570, 280596, 280600, 249748, 18578, 18577, 231184, 16, 16};
 
 float R () {
-    RNGState state;
-    seed_rng (&state, clock () % 4294967296);
-    return frandom (&state) / 1.1111;
+    RNGState rngstate;
+    seed_rng(&rngstate, programIndex + (clock () % 4294967296 << (programIndex & 15)));
+    return frandom (&rngstate);
 }
 
 struct vec {
@@ -54,8 +54,8 @@ static inline vec vnormalize (vec v) {
 
 static int T (vec o, vec d, float &t, vec &n){
     t = 1e9;
-    int m= 0;
-    float p= - o.z / d.z;
+    int m = 0;
+    float p = - o.z / d.z;
     if (.01 < p)
         t = p, n = vinit (0, 0, 1), m = 1;
     
@@ -68,9 +68,9 @@ static int T (vec o, vec d, float &t, vec &n){
         // There is a sphere but does the ray hits it ?
             
         vec box = vinit (-k, 0, -j - 4);
-        vec p = vadd (o, box);
-        float b = vdot (p, d);
-        float c = vdot (p, p) - 1;
+        vec pr = vadd (o, box);
+        float b = vdot (pr, d);
+        float c = vdot (pr, pr) - 1;
         float q = b * b - c;
         
         //Does the ray hit the sphere ?
@@ -82,7 +82,7 @@ static int T (vec o, vec d, float &t, vec &n){
                  // So far this is the minimum distance, save it. And also
                  // compute the bouncing ray vector into 'n'
                  t = s;
-                 n = vnormalize (vadd (p, vproduct(t, d)));
+                 n = vnormalize (vadd (pr, vproduct(t, d)));
                  m = 2;
             }
         }
@@ -91,7 +91,7 @@ static int T (vec o, vec d, float &t, vec &n){
 }
 
 // (S)ample the world and return the pixel color for
- // a ray passing by point o (Origin) and d (Direction)
+// a ray passing by point o (Origin) and d (Direction)
 static vec S (vec o, vec d) {
     float t;
     vec n;
@@ -103,15 +103,15 @@ static vec S (vec o, vec d) {
     if (!m) { // m==0
         //No sphere found and the ray goes upward: Generate a sky color
         vec box = vinit (.7, .6, 1);
-        return vproduct (pow (1-d.z, 4), box);
+        return vproduct (pow (1 - d.z, 4), box);
     }
 
     //A sphere was maybe hit.
 
-    vec h = vadd (o, vproduct (t, d));                    // h = intersection coordinate
-    vec box = vinit (9 + 1.1*R(), 9 + 1.1*R(), 16);
-    vec l = vnormalize ((vadd(box, vproduct (-1, h))));  // 'l' = direction to light (with random delta for soft-shadows).
-    vec r= vadd (d, vproduct ((vdot (n, d) * -2), n));               // r = The half-vector
+    vec h   = vadd (o, vproduct (t, d));                    // h = intersection coordinate
+    vec box = vinit (9 + R(), 9 + R(), 16);
+    vec l   = vnormalize ((vadd(box, vproduct (-1, h))));  // 'l' = direction to light (with random delta for soft-shadows).
+    vec r   = vadd (d, vproduct ((vdot (n, d) * -2), n));               // r = The half-vector
 
     //Calculated the lambertian factor
     float b = vdot (l, n);
@@ -145,31 +145,32 @@ export void picture_creator (uniform int width, uniform int height,
     vec c = vadd (vproduct(-256, (vadd (a,b))), g);       // WTF ? See https://news.ycombinator.com/item?id=6425965 for more.
 
 
-    for(uniform int y = height - 1; y >=0 ; y--)    //For each column
-    for(uniform int x = width - 1; x >= 0;  x--){   //For each pixel in a line
-
-        //Reuse the vector class to store not XYZ but a RGB pixel color
-        vec p = vinit (13, 13, 13);     // Default pixel color is almost pitch black
+    for(uniform int y = 0; y < height ; y++){    //For each column
+        for(uniform int x = 0; x < width  ; x++){   //For each pixel in a line
     
-        //Cast 64 rays per pixel (For blur (stochastic sampling) and soft-shadows.
-        foreach (r = 0 ... 64) {
-    
-            // The delta to apply to the origin of the view (For Depth of View blur).
-            vec t = vadd (vproduct (99, vproduct ((R()-.5), a)),
-                    vproduct (99, vproduct ((R()-.5), b))); // A little bit of delta up/down and left/right
-    
-            // Set the camera focal point v(17,16,8) and Cast the ray
-            // Accumulate the color returned in the p variable
-            vec box = vinit (17, 16, 8);
-            p = vadd (vproduct (28, S (vadd (box, t), //Ray Origin
-                vnormalize( vadd(vproduct (-1, t), vproduct (14,
-                        (vadd (vadd (vproduct ((R()+x), a),
-                        vproduct ((R()+y), b)), c))))))) // Ray Direction with random deltas for stochastic sampling
-                , p); // +p for color accumulation
+            //Reuse the vector class to store not XYZ but a RGB pixel color
+            vec p = vinit (13, 13, 13);     // Default pixel color is almost pitch black
+        
+            //Cast 64 rays per pixel (For blur (stochastic sampling) and soft-shadows.
+            foreach (r = 0 ... 64) {
+        
+                // The delta to apply to the origin of the view (For Depth of View blur).
+                vec t = vadd (vproduct (99, vproduct ((R()-.5), a)),
+                        vproduct (99, vproduct ((R()-.5), b))); // A little bit of delta up/down and left/right
+        
+                // Set the camera focal point v(17,16,8) and Cast the ray
+                // Accumulate the color returned in the p variable
+                vec box1 = vinit (17, 16, 8);
+                p = vadd (vproduct (28, S (vadd (box1, t), //Ray Origin
+                    vnormalize(vadd(vproduct (-1, t), vproduct (16,
+                            (vadd (vadd (vproduct ((R()+x-0.1), a),
+                            vproduct ((R()+y-0.05), b)), c))))))) // Ray Direction with random deltas for stochastic sampling
+                    , p); // +p for color accumulation
+            }
+            int index = x * depth + y * width * depth;
+            out [index    ] = (int) p.z;
+            out [index + 1] = (int) p.y;
+            out [index + 2] = (int) p.x;       
         }
-        int index = x * depth + y * width * depth;
-        out [index    ] = (int) p.x;
-        out [index + 1] = (int) p.z;
-        out [index + 2] = (int) p.y;   
-     }
+    }
 }
