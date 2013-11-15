@@ -12,6 +12,8 @@
 
 extern "C"
 void picture_creator (int width, int height, int depth, int out []);
+extern "C"
+int programNum;
 
 int main () {
 	printf("P6 512 512 255 "); // The PPM Header is issued

@@ -1,5 +1,7 @@
 int G [] = {247570, 280596, 280600, 249748, 18578, 18577, 231184, 16, 16};
 
+export const int programNum = programCount;
+
 float R () {
     RNGState rngstate;
     seed_rng(&rngstate, programIndex + (clock () % 4294967296 << (programIndex & 15)));
@@ -146,14 +148,13 @@ export void picture_creator (uniform int width, uniform int height,
 
 
     for(uniform int y = 0; y < height ; y++){    //For each column
-        for(uniform int x = 0; x < width  ; x++){   //For each pixel in a line
-    
+        foreach (x = 0 ... width) { //For each pixel in a line
             //Reuse the vector class to store not XYZ but a RGB pixel color
             vec p = vinit (13, 13, 13);     // Default pixel color is almost pitch black
         
             //Cast 64 rays per pixel (For blur (stochastic sampling) and soft-shadows.
-            foreach (r = 0 ... 64) {
-        
+            for (uniform int r = 0; r < 64; r++) {
+                
                 // The delta to apply to the origin of the view (For Depth of View blur).
                 vec t = vadd (vproduct (99, vproduct ((R()-.5), a)),
                         vproduct (99, vproduct ((R()-.5), b))); // A little bit of delta up/down and left/right
@@ -161,16 +162,18 @@ export void picture_creator (uniform int width, uniform int height,
                 // Set the camera focal point v(17,16,8) and Cast the ray
                 // Accumulate the color returned in the p variable
                 vec box1 = vinit (17, 16, 8);
-                p = vadd (vproduct (28, S (vadd (box1, t), //Ray Origin
+                p = vadd (vproduct (3.5, S (vadd (box1, t), //Ray Origin
                     vnormalize(vadd(vproduct (-1, t), vproduct (16,
                             (vadd (vadd (vproduct ((R()+x-0.1), a),
                             vproduct ((R()+y-0.05), b)), c))))))) // Ray Direction with random deltas for stochastic sampling
                     , p); // +p for color accumulation
             }
+            
             int index = x * depth + y * width * depth;
-            out [index    ] = (int) p.z;
-            out [index + 1] = (int) p.y;
-            out [index + 2] = (int) p.x;       
+           
+            atomic_add_local(&out [index    ], (int) p.z);
+            atomic_add_local(&out [index + 1], (int) p.y);
+            atomic_add_local(&out [index + 2], (int) p.x);
         }
     }
 }
