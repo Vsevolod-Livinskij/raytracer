@@ -1,12 +1,6 @@
 int G [] = {247570, 280596, 280600, 249748, 18578, 18577, 231184, 16, 16};
 
-export const int programNum = programCount;
-
-float R () {
-    RNGState rngstate;
-    seed_rng(&rngstate, programIndex + (clock () % 4294967296 << (programIndex & 15)));
-    return frandom (&rngstate);
-}
+RNGState rngstate;
 
 struct vec {
     float x,y,z; 
@@ -111,7 +105,7 @@ static vec S (vec o, vec d) {
     //A sphere was maybe hit.
 
     vec h   = vadd (o, vproduct (t, d));                    // h = intersection coordinate
-    vec box = vinit (9 + R(), 9 + R(), 16);
+    vec box = vinit (9 + frandom (&rngstate), 9 + frandom (&rngstate), 16);
     vec l   = vnormalize ((vadd(box, vproduct (-1, h))));  // 'l' = direction to light (with random delta for soft-shadows).
     vec r   = vadd (d, vproduct ((vdot (n, d) * -2), n));               // r = The half-vector
 
@@ -145,7 +139,9 @@ export void picture_creator (uniform int width, uniform int height,
     vec a = vproduct (.002, vnormalize (vcross (box, g))); // Camera up vector...Seem Z is pointing up :/ WTF !
     vec b = vproduct (0.002, vnormalize ((vcross (g, a))));        // The right vector, obtained via traditional cross-product
     vec c = vadd (vproduct(-256, (vadd (a,b))), g);       // WTF ? See https://news.ycombinator.com/item?id=6425965 for more.
-
+    vec box1 = vinit (17, 16, 8);
+    seed_rng(&rngstate, programIndex + (clock () % 4294967296 << (programIndex & 15)));
+    int size = width * height;
 
     for(uniform int y = 0; y < height ; y++){    //For each column
         foreach (x = 0 ... width) { //For each pixel in a line
@@ -156,24 +152,22 @@ export void picture_creator (uniform int width, uniform int height,
             for (uniform int r = 0; r < 64; r++) {
                 
                 // The delta to apply to the origin of the view (For Depth of View blur).
-                vec t = vadd (vproduct (99, vproduct ((R()-.5), a)),
-                        vproduct (99, vproduct ((R()-.5), b))); // A little bit of delta up/down and left/right
+                vec t = vadd (vproduct (99, vproduct ((frandom (&rngstate)-.5), a)),
+                              vproduct (99, vproduct ((frandom (&rngstate)-.5), b))); // A little bit of delta up/down and left/right
         
                 // Set the camera focal point v(17,16,8) and Cast the ray
                 // Accumulate the color returned in the p variable
-                vec box1 = vinit (17, 16, 8);
                 p = vadd (vproduct (3.5, S (vadd (box1, t), //Ray Origin
                     vnormalize(vadd(vproduct (-1, t), vproduct (16,
-                            (vadd (vadd (vproduct ((R()+x-0.1), a),
-                            vproduct ((R()+y-0.05), b)), c))))))) // Ray Direction with random deltas for stochastic sampling
+                            (vadd (vadd (vproduct ((frandom (&rngstate)+x-0.1), a),
+                            vproduct ((frandom (&rngstate)+y-0.05), b)), c))))))) // Ray Direction with random deltas for stochastic sampling
                     , p); // +p for color accumulation
             }
             
-            int index = x * depth + y * width * depth;
-           
-            atomic_add_local(&out [index    ], (int) p.z);
-            atomic_add_local(&out [index + 1], (int) p.y);
-            atomic_add_local(&out [index + 2], (int) p.x);
+            int index = x + y * width;
+            out [index] = p.z;
+            out [index + size] = p.y;
+            out [index + 2 * size] = p.x;
         }
     }
 }
